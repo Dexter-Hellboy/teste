@@ -81,8 +81,8 @@ jobs:
             --output boot-custom.img
           zip -r9 MoeKernel-Custom.zip boot-custom.img anykernel
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v2
-        with:
-          name: boot-custom
-          path: anykernel/MoeKernel-Custom.zip
+      - #name: Upload artifacts
+        #uses: actions/upload-artifact@v2
+        #with:
+         # name: boot-custom
+         # path: anykernel/MoeKernel-Custom.zip
