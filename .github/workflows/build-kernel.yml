@@ -1,0 +1,88 @@
+name: Build MoeKernel for Moto G34
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-kernel:
+    runs-on: ubuntu-latest
+    env:
+      ARCH: arm64
+      CROSS_COMPILE: aarch64-linux-gnu-
+      CC: clang
+      LD: ld.lld
+      HOSTCC: gcc
+      HOSTCXX: g++
+      HOSTLD: ld
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          path: moekernel
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential flex bison libssl-dev bc wget \
+            crossbuild-essential-arm64 clang lld git zip mkbootimg
+
+      - name: Apply bcmp→memcmp patch
+        run: |
+          cd moekernel
+          sed -i '1i#include <string.h>' scripts/kconfig/confdata.c
+          sed -i 's/\<bcmp\>/memcmp/g' scripts/kconfig/confdata.c
+
+      - name: Generate default config
+        run: |
+          cd moekernel
+          make defconfig
+
+      - name: Enable custom kernel options
+        run: |
+          cd moekernel
+          scripts/config --enable EROFS_FS
+          scripts/config --enable EROFS_FS_XATTR
+          scripts/config --enable OVERLAY_FS
+          scripts/config --enable ZRAM
+          scripts/config --enable ZRAM_COMPRESS
+          scripts/config --enable SELINUX
+          scripts/config --enable SELINUX_BOOTPARAM
+          scripts/config --enable MODULES
+          scripts/config --enable KERNELSU
+          scripts/config --enable SECURITY
+          scripts/config --enable SECURITYFS
+          scripts/config --enable DEBUG_FS
+          scripts/config --enable DYNAMIC_DEBUG
+          yes '' | make olddefconfig
+
+      - name: Compile kernel
+        run: |
+          cd moekernel
+          make -j$(nproc)
+
+      - name: Clone AnyKernel3
+        run: |
+          cd $GITHUB_WORKSPACE
+          git clone https://github.com/osm0sis/AnyKernel3.git anykernel
+
+      - name: Package boot zip with AnyKernel3
+        run: |
+          cd anykernel
+          cp $GITHUB_WORKSPACE/moekernel/arch/arm64/boot/Image.gz-dtb ./Image.gz-dtb
+          cp $GITHUB_WORKSPACE/moekernel/device/motorola/fogos/ramdisk.img ./ramdisk.img
+          cp $GITHUB_WORKSPACE/moekernel/device/motorola/fogos/cmdline cmdline
+          mkbootimg \
+            --kernel Image.gz-dtb \
+            --ramdisk ramdisk.img \
+            --cmdline "$(cat cmdline) androidboot.selinux=permissive" \
+            --base 0x80000000 \
+            --pagesize 2048 \
+            --output boot-custom.img
+          zip -r9 MoeKernel-Custom.zip boot-custom.img anykernel
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: boot-custom
+          path: anykernel/MoeKernel-Custom.zip
