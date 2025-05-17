@@ -1,24 +1,6 @@
-name: Build MoeKernel for Moto G34
-
-on:
-  workflow_dispatch:
-
-jobs:
-  build-kernel:
-    runs-on: ubuntu-latest
-    env:
-      ARCH: arm64
-      CROSS_COMPILE: aarch64-linux-gnu-
-      CC: clang
-      LD: ld.lld
-      HOSTCC: gcc
-      HOSTCXX: g++
-      HOSTLD: ld
-    steps:
+steps:
       - name: Checkout source
         uses: actions/checkout@v3
-        with:
-          path: moekernel
 
       - name: Install dependencies
         run: |
@@ -29,18 +11,14 @@ jobs:
 
       - name: Apply bcmp→memcmp patch
         run: |
-          cd moekernel
           sed -i '1i#include <string.h>' scripts/kconfig/confdata.c
           sed -i 's/\<bcmp\>/memcmp/g' scripts/kconfig/confdata.c
 
       - name: Generate default config
-        run: |
-          cd moekernel
-          make defconfig
+        run: make defconfig
 
       - name: Enable custom kernel options
         run: |
-          cd moekernel
           scripts/config --enable EROFS_FS
           scripts/config --enable EROFS_FS_XATTR
           scripts/config --enable OVERLAY_FS
@@ -57,21 +35,17 @@ jobs:
           yes '' | make olddefconfig
 
       - name: Compile kernel
-        run: |
-          cd moekernel
-          make -j$(nproc)
+        run: make -j$(nproc)
 
-      - name: Clone AnyKernel3
-        run: |
-          cd $GITHUB_WORKSPACE
-          git clone https://github.com/osm0sis/AnyKernel3.git anykernel
+- name: Clone AnyKernel3
+        run: git clone https://github.com/osm0sis/AnyKernel3.git anykernel
 
-      - name: Package boot zip with AnyKernel3
+      - name: Package boot zip
         run: |
+          cp arch/arm64/boot/Image.gz-dtb anykernel/Image.gz-dtb
+          cp device/motorola/fogos/ramdisk.img anykernel/ramdisk.img
+          cp device/motorola/fogos/cmdline anykernel/cmdline
           cd anykernel
-          cp $GITHUB_WORKSPACE/moekernel/arch/arm64/boot/Image.gz-dtb ./Image.gz-dtb
-          cp $GITHUB_WORKSPACE/moekernel/device/motorola/fogos/ramdisk.img ./ramdisk.img
-          cp $GITHUB_WORKSPACE/moekernel/device/motorola/fogos/cmdline cmdline
           mkbootimg \
             --kernel Image.gz-dtb \
             --ramdisk ramdisk.img \
@@ -79,4 +53,4 @@ jobs:
             --base 0x80000000 \
             --pagesize 2048 \
             --output boot-custom.img
-          zip -r9 MoeKernel-Custom.zip boot-custom.img anykernel
+          zip -r9 MoeKernel-Custom.zip boot-custom.img .
