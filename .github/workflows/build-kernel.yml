@@ -16,7 +16,7 @@ jobs:
       HOSTLD: ld
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
         with:
           path: moekernel
 
@@ -82,7 +82,7 @@ jobs:
           zip -r9 MoeKernel-Custom.zip boot-custom.img anykernel
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v2
         with:
           name: boot-custom
           path: anykernel/MoeKernel-Custom.zip
