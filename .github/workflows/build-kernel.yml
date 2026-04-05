@@ -1,0 +1,56 @@
+steps:
+      - name: Checkout source
+        uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential flex bison libssl-dev bc wget \
+            crossbuild-essential-arm64 clang lld git zip mkbootimg
+
+      - name: Apply bcmp→memcmp patch
+        run: |
+          sed -i '1i#include <string.h>' scripts/kconfig/confdata.c
+          sed -i 's/\<bcmp\>/memcmp/g' scripts/kconfig/confdata.c
+
+      - name: Generate default config
+        run: make defconfig
+
+      - name: Enable custom kernel options
+        run: |
+          scripts/config --enable EROFS_FS
+          scripts/config --enable EROFS_FS_XATTR
+          scripts/config --enable OVERLAY_FS
+          scripts/config --enable ZRAM
+          scripts/config --enable ZRAM_COMPRESS
+          scripts/config --enable SELINUX
+          scripts/config --enable SELINUX_BOOTPARAM
+          scripts/config --enable MODULES
+          scripts/config --enable KERNELSU
+          scripts/config --enable SECURITY
+          scripts/config --enable SECURITYFS
+          scripts/config --enable DEBUG_FS
+          scripts/config --enable DYNAMIC_DEBUG
+          yes '' | make olddefconfig
+
+      - name: Compile kernel
+        run: make -j$(nproc)
+
+- name: Clone AnyKernel3
+        run: git clone https://github.com/osm0sis/AnyKernel3.git anykernel
+
+      - name: Package boot zip
+        run: |
+          cp arch/arm64/boot/Image.gz-dtb anykernel/Image.gz-dtb
+          cp device/motorola/fogos/ramdisk.img anykernel/ramdisk.img
+          cp device/motorola/fogos/cmdline anykernel/cmdline
+          cd anykernel
+          mkbootimg \
+            --kernel Image.gz-dtb \
+            --ramdisk ramdisk.img \
+            --cmdline "$(cat cmdline) androidboot.selinux=permissive" \
+            --base 0x80000000 \
+            --pagesize 2048 \
+            --output boot-custom.img
+          zip -r9 MoeKernel-Custom.zip boot-custom.img .
